@@ -9,7 +9,7 @@ on:
 
 defaults:
   run:
-    working-directory: "template-ansible-role"
+    working-directory: ${{ github.event.repository.name }}
 
 jobs:
   lint:
@@ -18,43 +18,61 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v3
         with:
-          path: "template-ansible-role"
+          path: ${{ github.event.repository.name }}
 
-      - name: Set up Python 3.
-        uses: actions/setup-python@v5
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
         with:
           python-version: "3.x"
 
       - name: Install test dependencies
-        run: pip install -q yamllint
+        run: uv sync --dev
 
-      - name: Run tests
-        run: yamllint .
+      - name: Run yamllint
+        run: uv run yamllint .
+
+      - name: Run ansible-lint
+        run: uv run ansible-lint
 
   test:
     runs-on: ubuntu-latest
     strategy:
       matrix:
+        include:
+          # - ansible-version: "2.16"
+          #   python-version: "3.12"
+          # - ansible-version: "2.17"
+          #   python-version: "3.12"
+          - ansible-version: "2.18"
+            python-version: "3.13"
+          - ansible-version: "2.19"
+            python-version: "3.13"
+          - ansible-version: "2.20"
+            python-version: "3.14"
         distro:
-          - "debian:12"
-          - "rockylinux:9"
-          - "ubuntu:24.04"
+          - "debian13"
+          - "rockylinux9"
+          - "ubuntu2404"
     steps:
       - name: Check out repository
         uses: actions/checkout@v3
         with:
-          path: "template-ansible-role"
+          path: ${{ github.event.repository.name }}
 
-      - name: Set up Python 3.
-        uses: actions/setup-python@v5
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
         with:
-          python-version: "3.x"
+          python-version: ${{ matrix.python-version }}
 
       - name: Install test dependencies
-        run: pip install ansible molecule molecule-plugins[docker] docker
+        run: |
+          uv sync \
+            --dev \
+            --python python${{ matrix.python-version }} \
+            --upgrade-package "ansible-core==${{ matrix.ansible-version }}.*"
 
       - name: Run tests
-        run: molecule test
+        run: uv run molecule test
         env:
           PY_COLORS: "1"
           ANSIBLE_FORCE_COLOR: "1"

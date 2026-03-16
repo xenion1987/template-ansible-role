@@ -5,7 +5,7 @@ ignore:
   - .ansible/
   - .git/
   - .github/
-  - venv/
+  - .venv/
 
 rules:
   braces:
