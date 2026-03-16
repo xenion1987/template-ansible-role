@@ -9,4 +9,5 @@ exclude_paths:
   - .ansible/
   - .git/
   - .github/
-  - venv/
+  - .venv/
+  - molecule/

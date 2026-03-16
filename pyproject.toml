@@ -1,0 +1,18 @@
+[project]
+name = "template-ansible-role-xyz"
+version = "0.1.0"
+description = "A template for creating Ansible roles"
+readme = "README.md"
+requires-python = ">=3.12,<3.15"
+dependencies = [
+    "ansible-core",
+]
+
+[dependency-groups]
+dev = [
+    "ansible-dev-tools",
+    "ansible-doctor",
+    "molecule",
+    "molecule-plugins[podman]",
+    "pre-commit",
+]

@@ -1,0 +1,5 @@
+ansible-dev-tools
+ansible-doctor
+molecule
+molecule-plugins[podman]
+pre-commit

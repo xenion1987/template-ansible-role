@@ -1,21 +1,5 @@
 ---
-# https://docs.ansible.com/ansible/latest/playbook_guide/playbooks_reuse_roles.html#role-argument-validation
+description: 
 argument_specs:
-  main:
-    author:
-      - Xenion1987
-    description:
-      - This is a
-      - mulit line
-      - description
-    short_description: Main tasks for role ROLENAME
-    options:
-      option1:
-        choices:
-          - choices if
-          - type list
-        default: "default value"
-        description: "A single line descryption"
-        required: false
-        # ['str', 'list', 'dict', 'bool', 'int', 'float', 'path', 'raw', 'jsonarg', 'json', 'bytes', 'bits']
-        type: list
+  template-ansible-role:
+    options: {}
