@@ -1,5 +1,6 @@
 ---
-description:
 argument_specs:
   template-ansible-role:
+    author: "xenion1987"
+    description: "A template for creating Ansible roles"
     options: {}
