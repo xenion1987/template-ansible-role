@@ -1,0 +1,80 @@
+---
+name: Release
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Determine bump type from commit message
+        id: bump
+        run: |
+          TYPE=""
+          while IFS= read -r line; do
+            case "$line" in
+              "major: "*) TYPE="major"; break;;
+              "feat: "*) TYPE="minor"; break;;
+              "fix: "*) TYPE="patch"; break;;
+            esac
+          done < <(git log --format="%B" -n 1 HEAD)
+
+          if [ -z "$TYPE" ]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "No semantic prefix found (major:/feat:/fix:). Skipping release."
+          else
+            echo "type=$TYPE" >> "$GITHUB_OUTPUT"
+            echo "Bump type: $TYPE"
+          fi
+
+      - name: Calculate new version
+        id: version
+        if: steps.bump.outputs.skip != 'true'
+        run: |
+          LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "0.0.0")
+          LATEST_TAG="${LATEST_TAG#v}"
+          IFS='.' read -r MAJOR MINOR PATCH <<< "$LATEST_TAG"
+
+          case "${{ steps.bump.outputs.type }}" in
+            major)
+              echo "version=$((MAJOR + 1)).0.0" >> "$GITHUB_OUTPUT"
+              ;;
+            minor)
+              echo "version=$MAJOR.$((MINOR + 1)).0" >> "$GITHUB_OUTPUT"
+              ;;
+            patch)
+              echo "version=$MAJOR.$MINOR.$((PATCH + 1))" >> "$GITHUB_OUTPUT"
+              ;;
+          esac
+
+      - name: Create GitHub release
+        if: steps.bump.outputs.skip != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "v${{ steps.version.outputs.version }}" \
+            --title "v${{ steps.version.outputs.version }}" \
+            --generate-notes
+
+      # - name: Import role to Ansible Galaxy
+      #   if: |
+      #     steps.bump.outputs.skip != 'true'
+      #   env:
+      #     GALAXY_API_KEY: ${{ secrets.GALAXY_API_KEY }}
+      #   run: |
+      #     pip install ansible-core
+      #     ansible-galaxy role import \
+      #       --api-key "$GALAXY_API_KEY" \
+      #       --no-wait \
+      #       "${{ github.repository_owner }}" \
+      #       "${{ github.event.repository.name }}"

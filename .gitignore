@@ -1,8 +1,6 @@
 # Ansible
 .ansible/
 meta/.galaxy_install_info
-vars/
-!vars/.keep
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
@@ -173,4 +171,5 @@ uv.lock
 
 # VSCode
 .vscode/
+!.vscode/settings.example.json
 .devcontainer/

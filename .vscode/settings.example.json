@@ -1,0 +1,22 @@
+{
+  "ansible.ansible.useFullyQualifiedCollectionNames": true,
+  "ansible.lightspeed.suggestions.enabled": false,
+  "ansible.python.interpreterPath": ".venv/ansible/bin/python",
+  "python.terminal.activateEnvironment": true,
+  "redhat.telemetry.enabled": false,
+  "files.associations": {
+    "*.j2": "ansible-jinja",
+    "**/defaults/**/*.y*ml": "ansible",
+    "**/group_vars/**/*.y*ml": "ansible",
+    "**/host_vars/**/*.y*ml": "ansible",
+    "**/vars/**/*.y*ml": "ansible",
+    "**/tasks/**/*.y*ml": "ansible",
+    "**/handlers/*.y*ml": "ansible",
+    "**/meta/*.y*ml": "ansible",
+    ".ansible-lint": "yaml",
+    "ansible.cfg": "properties",
+    "molecule.y*ml": "yaml",
+    "requirements.txt": "pip-requirements",
+    "requirements.y*ml": "ansible"
+  }
+}

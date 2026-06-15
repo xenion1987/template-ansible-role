@@ -1,3 +1,4 @@
 ---
-- name: PING
-  ansible.builtin.ping:
+- name: DEBUG | Hello World
+  ansible.builtin.debug:
+    msg: "Hello from {{ role_name }} role"

@@ -1,2 +1,6 @@
 ---
-foo: bar
+# @var example_variable: "Example variable for demonstration purposes"
+# @var example_variable:type: str
+# @var example_variable:required: false
+# @var example_variable:default: "hello_world"
+example_variable: "hello_world"

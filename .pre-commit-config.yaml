@@ -7,3 +7,18 @@ repos:
         name: Cleanup trailing whitespaces
         args: [--markdown-linebreak-ext=md]
       - id: end-of-file-fixer
+
+  - repo: local
+    hooks:
+      - id: ansible-lint
+        name: Run ansible-lint
+        entry: uv run ansible-lint
+        language: system
+        types: [yaml]
+        stages: [pre-commit]
+      - id: yamllint
+        name: Run yamllint
+        entry: uv run yamllint
+        language: system
+        types: [yaml]
+        stages: [pre-commit]
