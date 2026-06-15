@@ -15,10 +15,7 @@ platforms:
     tmpfs:
       /run: "rw"
       /tmp: "rw"
-# Required for 'offline' role testing
 provisioner:
   name: ansible
-  # env:
-  #   ANSIBLE_ROLES_PATH: "../../../"
 verifier:
   name: ansible

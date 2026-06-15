@@ -4,9 +4,9 @@ dependencies: []
 galaxy_info:
   author: "xenion1987"
   company: "Access-InTech"
-  description: "Create a personalized message of the day"
+  description: "A template to create Ansible roles"
   license: "BSD, MIT"
-  min_ansible_version: "2.12"
+  min_ansible_version: "2.18"
   namespace: "xenion1987"
   role_name: "template"
   platforms:
@@ -19,6 +19,4 @@ galaxy_info:
     - name: Ubuntu
       versions:
         - all
-  galaxy_tags:
-    - configuration
-    - system
+  galaxy_tags: []

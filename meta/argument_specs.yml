@@ -1,6 +1,8 @@
 ---
 argument_specs:
+  # PLACEHOLDER: Replace with your actual role name
+  # e.g. "my_custom_role"
   template-ansible-role:
     author: "xenion1987"
-    description: "A template for creating Ansible roles"
+    description: "A template to create Ansible roles"
     options: {}

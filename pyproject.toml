@@ -1,9 +1,9 @@
 [project]
-name = "template-ansible-role-xyz"
+name = "template-ansible-role"
 version = "0.1.0"
 description = "A template for creating Ansible roles"
 readme = "README.md"
-requires-python = ">=3.12,<3.15"
+requires-python = ">=3.12"
 dependencies = [
     "ansible-core",
 ]
