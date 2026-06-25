@@ -3,16 +3,18 @@ name = "template-ansible-role"
 version = "0.1.0"
 description = "A template for creating Ansible roles"
 readme = "README.md"
-requires-python = ">=3.12"
-dependencies = [
-    "ansible-core",
-]
+requires-python = ">=3.12,<3.15"
 
 [dependency-groups]
 dev = [
+    "ansible-core>=2.18",
     "ansible-dev-tools",
     "ansible-doctor",
+    "pre-commit",
     "molecule",
     "molecule-plugins[podman]",
-    "pre-commit",
+]
+openstack = [
+    "openstacksdk",
+    "molecule-plugins[openstack]",
 ]

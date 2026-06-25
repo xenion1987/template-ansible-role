@@ -1,8 +1,11 @@
 ---
 argument_specs:
-  # PLACEHOLDER: Replace with your actual role name
-  # e.g. "my_custom_role"
   template-ansible-role:
     author: "xenion1987"
     description: "A template to create Ansible roles"
+    # Variable documentation is maintained in defaults/main.yml
+    # via @var annotations and rendered by ansible-doctor.
+    #
+    # Populate options{} only when runtime argument validation
+    # (type checks, required fields, choices) is needed.
     options: {}
