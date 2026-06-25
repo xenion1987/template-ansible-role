@@ -5,7 +5,7 @@ galaxy_info:
   author: "xenion1987"
   company: "Access-InTech"
   description: "A template to create Ansible roles"
-  license: "BSD, MIT"
+  license: "MIT"
   min_ansible_version: "2.18"
   namespace: "xenion1987"
   role_name: "template"

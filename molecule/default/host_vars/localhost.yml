@@ -1,2 +1,2 @@
 ---
-ansible_connect: local
+ansible_connection: local
