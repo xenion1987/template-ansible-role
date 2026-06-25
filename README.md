@@ -1,6 +1,6 @@
 # Ansible role: ${{ role_name }}
 
-[![pre-commit](https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit)](https://github.com/pre-commit/pre-commit)
+[![prek](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/j178/prek/master/docs/assets/badge-v0.json)](https://github.com/j178/prek)
 [![CI](https://github.com/OWNER/REPO/actions/workflows/ci.yml/badge.svg)](https://github.com/OWNER/REPO/actions/workflows/ci.yml)
 [![License](https://img.shields.io/github/license/OWNER/REPO)](LICENSE)
 
@@ -17,7 +17,7 @@ Describe what this role does.
 | ------------------------------------- | ---------------- | -------------------------------------------------------------------------- |
 | [uv](https://docs.astral.sh/uv/)      | yes              | Python package and project manager (manages Python versions automatically) |
 | [Podman](https://podman.io/)          | yes              | Container runtime for Molecule tests                                       |
-| [pre-commit](https://pre-commit.com/) | no (recommended) | Local lint hooks                                                           |
+| [prek](https://github.com/j178/prek) | no (recommended) | Fast Git hook manager (drop-in pre-commit alternative)                     |
 | [direnv](https://direnv.net/)         | no               | Auto-load environment variables                                            |
 
 ---
@@ -107,12 +107,12 @@ uv run molecule verify     # Run verification steps
 uv run molecule destroy    # Tear down containers
 ```
 
-### Pre-commit hooks
+### Git hooks (prek)
 
-After installing dev dependencies, activate the hooks:
+After installing dev dependencies, install the hooks:
 
 ```sh
-uv run pre-commit install
+prek install
 ```
 
 The hooks (`trailing-whitespace`, `end-of-file-fixer`, `ansible-lint`, `yamllint`) now run automatically on every `git commit`.
@@ -129,7 +129,7 @@ This template includes [ansible-doctor](https://ansible-doctor.geekdocs.de/). It
 uv run ansible-doctor
 ```
 
-A [pre-commit hook](.pre-commit-config.yaml) runs `ansible-doctor` automatically on changes to `defaults/`, `meta/`, `HEADER.md` or `.ansibledoctor.yml`.
+A [prek hook](.pre-commit-config.yaml) runs `ansible-doctor` automatically on changes to `defaults/`, `meta/`, `HEADER.md` or `.ansibledoctor.yml`.
 
 ---
 
