@@ -1,80 +1,82 @@
 ---
-name: Release
+name: Release Pipeline
 
 on:
   push:
     branches:
       - main
 
+permissions:
+  contents: write
+
 jobs:
   release:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
+          path: ${{ github.event.repository.name }}
           fetch-depth: 0
+          fetch-tags: true
 
-      - name: Determine bump type from commit message
-        id: bump
+      - name: Determine bump type
+        id: bump_type
+        env:
+          COMMIT_MSG: ${{ github.event.head_commit.message }}
         run: |
-          TYPE=""
-          while IFS= read -r line; do
-            case "$line" in
-              "major: "*) TYPE="major"; break;;
-              "feat: "*) TYPE="minor"; break;;
-              "fix: "*) TYPE="patch"; break;;
-            esac
-          done < <(git log --format="%B" -n 1 HEAD)
-
-          if [ -z "$TYPE" ]; then
-            echo "skip=true" >> "$GITHUB_OUTPUT"
-            echo "No semantic prefix found (major:/feat:/fix:). Skipping release."
+          if echo "$COMMIT_MSG" | grep -qiE '^major:'; then
+            echo "bump=major" >> "$GITHUB_OUTPUT"
+          elif echo "$COMMIT_MSG" | grep -qiE '^feat:'; then
+            echo "bump=minor" >> "$GITHUB_OUTPUT"
+          elif echo "$COMMIT_MSG" | grep -qiE '^fix:'; then
+            echo "bump=patch" >> "$GITHUB_OUTPUT"
           else
-            echo "type=$TYPE" >> "$GITHUB_OUTPUT"
-            echo "Bump type: $TYPE"
+            echo "bump=none" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Calculate new version
-        id: version
-        if: steps.bump.outputs.skip != 'true'
+        if: steps.bump_type.outputs.bump != 'none'
+        id: new_version
         run: |
-          LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "0.0.0")
+          LATEST_TAG="$(git describe --tags --abbrev=0 2>/dev/null || true)"
+          LATEST_TAG="${LATEST_TAG:-0.0.0}"
           LATEST_TAG="${LATEST_TAG#v}"
-          IFS='.' read -r MAJOR MINOR PATCH <<< "$LATEST_TAG"
-
-          case "${{ steps.bump.outputs.type }}" in
-            major)
-              echo "version=$((MAJOR + 1)).0.0" >> "$GITHUB_OUTPUT"
-              ;;
-            minor)
-              echo "version=$MAJOR.$((MINOR + 1)).0" >> "$GITHUB_OUTPUT"
-              ;;
-            patch)
-              echo "version=$MAJOR.$MINOR.$((PATCH + 1))" >> "$GITHUB_OUTPUT"
-              ;;
+          IFS='.' read -r MAJOR MINOR PATCH <<< "${LATEST_TAG}"
+          case "${{ steps.bump_type.outputs.bump }}" in
+            major) echo "version=v$((MAJOR + 1)).0.0" >> "$GITHUB_OUTPUT" ;;
+            minor) echo "version=v${MAJOR}.$((MINOR + 1)).0" >> "$GITHUB_OUTPUT" ;;
+            patch) echo "version=v${MAJOR}.${MINOR}.$((PATCH + 1))" >> "$GITHUB_OUTPUT" ;;
           esac
 
-      - name: Create GitHub release
-        if: steps.bump.outputs.skip != 'true'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          gh release create "v${{ steps.version.outputs.version }}" \
-            --title "v${{ steps.version.outputs.version }}" \
-            --generate-notes
+      - name: Create release
+        if: steps.bump_type.outputs.bump != 'none'
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: ${{ steps.new_version.outputs.version }}
+          generate_release_notes: true
 
+      ### DEFAULT GALAXY IMPORT (uses GitHub owner as namespace)
       # - name: Import role to Ansible Galaxy
-      #   if: |
-      #     steps.bump.outputs.skip != 'true'
-      #   env:
-      #     GALAXY_API_KEY: ${{ secrets.GALAXY_API_KEY }}
+      #   if: steps.bump_type.outputs.bump != 'none' && secrets.GALAXY_API_KEY != ''
       #   run: |
-      #     pip install ansible-core
-      #     ansible-galaxy role import \
-      #       --api-key "$GALAXY_API_KEY" \
-      #       --no-wait \
+      #     uv run ansible-galaxy role import \
+      #       --token "${{ secrets.GALAXY_API_KEY }}" \
       #       "${{ github.repository_owner }}" \
       #       "${{ github.event.repository.name }}"
+
+      ### ALTERNATE GALAXY IMPORT (uses configurable namespace)
+      - name: Import role to Ansible Galaxy with alternate namespace
+        if: steps.bump_type.outputs.bump != 'none' && secrets.GALAXY_API_KEY != ''
+        env:
+          GALAXY_NAMESPACE: ${{ vars.GALAXY_NAMESPACE || github.repository_owner }}
+        run: |
+          curl -sS -X POST "https://galaxy.ansible.com/api/v1/imports/" \
+            -H "Authorization: token ${{ secrets.GALAXY_API_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "alternate_namespace_name": "'"${GALAXY_NAMESPACE}"'",
+              "github_reference": "${{ github.event.repository.default_branch }}",
+              "github_repo": "${{ github.event.repository.name }}",
+              "github_user": "${{ github.repository_owner }}"
+            }'
