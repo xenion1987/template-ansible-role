@@ -67,12 +67,13 @@ jobs:
 
       ### ALTERNATE GALAXY IMPORT (uses configurable namespace)
       - name: Import role to Ansible Galaxy with alternate namespace
-        if: steps.bump_type.outputs.bump != 'none' && secrets.GALAXY_API_KEY != ''
+        if: steps.bump_type.outputs.bump != 'none' && env.GALAXY_API_KEY != ''
         env:
+          GALAXY_API_KEY: ${{ secrets.GALAXY_API_KEY }}
           GALAXY_NAMESPACE: ${{ vars.GALAXY_NAMESPACE || github.repository_owner }}
         run: |
           curl -sS -X POST "https://galaxy.ansible.com/api/v1/imports/" \
-            -H "Authorization: token ${{ secrets.GALAXY_API_KEY }}" \
+            -H "Authorization: token ${GALAXY_API_KEY}" \
             -H "Content-Type: application/json" \
             -d '{
               "alternate_namespace_name": "'"${GALAXY_NAMESPACE}"'",
