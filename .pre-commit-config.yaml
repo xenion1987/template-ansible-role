@@ -10,6 +10,13 @@ repos:
 
   - repo: local
     hooks:
+      - id: ansible-doctor
+        name: Generate README.md with ansible-doctor
+        entry: uv run ansible-doctor
+        language: system
+        pass_filenames: false
+        files: ^(defaults/|meta/|HEADER\.md|\.ansibledoctor\.yml)
+        stages: [pre-commit]
       - id: ansible-lint
         name: Run ansible-lint
         entry: uv run ansible-lint
