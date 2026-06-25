@@ -27,7 +27,7 @@ jobs:
           python-version: "3.14"
 
       - name: Install test dependencies
-        run: uv sync --groups dev
+        run: uv sync --group dev
         working-directory: ${{ env.ROLE_NAME }}
 
       - name: Run yamllint
@@ -65,7 +65,7 @@ jobs:
       - name: Install test dependencies
         run: |
           uv sync \
-            --groups dev \
+            --group dev \
             --python python${{ matrix.python-version }} \
             --upgrade-package "ansible-core==${{ matrix.ansible-version }}.*"
         working-directory: ${{ env.ROLE_NAME }}
