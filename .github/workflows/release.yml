@@ -33,46 +33,7 @@ env:
   ROLE_NAME: ${{ github.event.repository.name }}
 
 jobs:
-  # The release pipeline is opt-in and stays dormant until GALAXY_API_KEY is
-  # configured. Without this gate a template repository - and every fresh copy
-  # of it - tags itself on the first `feat:` commit. The check lives in a step's
-  # env because the `secrets` context is not available in a job-level or
-  # step-level `if:`; only `env` is.
-  gate:
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    permissions: {}
-    outputs:
-      enabled: ${{ steps.check.outputs.enabled }}
-    steps:
-      - name: Check whether releasing is configured
-        id: check
-        shell: bash
-        env:
-          GALAXY_API_KEY: ${{ secrets.GALAXY_API_KEY }}
-        run: |
-          set -euo pipefail
-          if [ -n "${GALAXY_API_KEY}" ]; then
-            echo "enabled=true" >> "${GITHUB_OUTPUT}"
-            echo "GALAXY_API_KEY is configured - release pipeline is active"
-          else
-            echo "enabled=false" >> "${GITHUB_OUTPUT}"
-            echo "GALAXY_API_KEY is not configured - skipping the release pipeline"
-            {
-              echo "### Release pipeline dormant"
-              echo
-              echo "No release was cut: \`GALAXY_API_KEY\` is not configured."
-              echo
-              echo "This is the intended state for the template repository and"
-              echo "for a fresh copy of it. Add the secret under"
-              echo "*Settings -> Secrets and variables -> Actions* to activate"
-              echo "tagging, GitHub releases and the Galaxy import."
-            } >> "${GITHUB_STEP_SUMMARY}"
-          fi
-
   release:
-    needs: gate
-    if: needs.gate.outputs.enabled == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -265,8 +226,17 @@ jobs:
         run: |
           set -euo pipefail
 
-          # No emptiness check needed: the `gate` job already established that
-          # GALAXY_API_KEY is set, otherwise this job would not run.
+          # The token is the Galaxy switch only: without it this import is
+          # skipped, while the tag and the GitHub release above are created
+          # regardless. Checked in the script rather than in the step's `if:`,
+          # because that condition cannot read the env the step defines.
+          if [ -z "${GALAXY_API_KEY}" ]; then
+            echo "GALAXY_API_KEY is not configured - skipping the Galaxy import"
+            echo "Galaxy import skipped: no \`GALAXY_API_KEY\` configured" \
+              >> "${GITHUB_STEP_SUMMARY}"
+            exit 0
+          fi
+
           payload="$(
             jq -nc \
               --arg ns "${GALAXY_NAMESPACE}" \

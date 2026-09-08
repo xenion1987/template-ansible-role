@@ -201,7 +201,7 @@ uv run ansible-doctor
    | ansible-core | Python |
    | ------------ | ------ |
    | 2.19         | 3.13   |
-   | 2.20         | 3.14   |
+   | 2.21         | 3.14   |
 
    The pairs are explicit because each `ansible-core` release supports a
    specific range of controller Python versions. Keep the oldest pair in sync
@@ -222,15 +222,12 @@ name automatically.
 
 ### Release Pipeline (`.github/workflows/release.yml`)
 
-> [!IMPORTANT]
-> **Releasing is opt-in.** A `gate` job checks `GALAXY_API_KEY` before anything
-> else, and the whole pipeline is skipped while that secret is unset - no tag,
-> no GitHub release, no Galaxy import. That is the intended state for this
-> template and for a copy of it that is not ready to publish: without the gate,
-> a fresh repository tags itself `v0.1.0` on its first `feat:` commit. Add the
-> secret to activate releasing.
+Tag and GitHub release are always created when a commit carries a release
+prefix. Publishing to Ansible Galaxy is the only part that needs credentials and
+is skipped without them, so the pipeline is useful in a repository that has no
+Galaxy presence at all.
 
-Once activated, a push to `main` cuts a release automatically. The bump is derived from **every
+A push to `main` cuts a release automatically. The bump is derived from **every
 commit since the last release tag**, not just the pushed commit - so a
 multi-commit push, a merge-commit strategy, or a run that GitHub drops from the
 concurrency queue cannot silently lose a release. The strongest signal wins:
@@ -278,10 +275,11 @@ groups PRs into categories and excludes dependency bumps.
 > force-push or deletion covers it. Add a pull-request requirement on top if you
 > want to rule out direct pushes entirely.
 
-After the release, the role is imported to Ansible Galaxy. The import references
-the default branch because Galaxy discovers a role's versions from the
-repository's tags. No emptiness check is needed at that step - the `gate` job
-already established that the token exists.
+After the release, the role is imported to Ansible Galaxy - but only if
+`GALAXY_API_KEY` is configured. Without it the step logs why it is skipping and
+succeeds, so tag and GitHub release still happen. The import references the
+default branch because Galaxy discovers a role's versions from the repository's
+tags.
 
 Both workflows pin their actions to commit SHAs rather than moving tags; the
 release job holds `contents: write` and sees the Galaxy token. Dependabot
@@ -291,10 +289,10 @@ updates SHA pins just as it does version tags.
 
 Configure these under **Settings -> Secrets and variables -> Actions**:
 
-| Name               | Type     | Required        | Description                                                                                    |
-| ------------------ | -------- | --------------- | ---------------------------------------------------------------------------------------------- |
-| `GALAXY_API_KEY`   | Secret   | for any release | Ansible Galaxy API token. Doubles as the master switch: while unset, the whole pipeline is idle |
-| `GALAXY_NAMESPACE` | Variable | no              | Alternate Galaxy namespace (defaults to the repository owner)                                  |
+| Name               | Type     | Required | Description                                                              |
+| ------------------ | -------- | -------- | ------------------------------------------------------------------------ |
+| `GALAXY_API_KEY`   | Secret   | no       | Ansible Galaxy API token; only the Galaxy import is skipped without it   |
+| `GALAXY_NAMESPACE` | Variable | no       | Alternate Galaxy namespace (defaults to the repository owner)            |
 
 ### Dependency updates
 
