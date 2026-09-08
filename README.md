@@ -201,7 +201,7 @@ uv run ansible-doctor
    | ansible-core | Python |
    | ------------ | ------ |
    | 2.19         | 3.13   |
-   | 2.20         | 3.14   |
+   | 2.21         | 3.14   |
 
    The pairs are explicit because each `ansible-core` release supports a
    specific range of controller Python versions. Keep the oldest pair in sync
