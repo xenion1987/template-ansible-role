@@ -3,11 +3,14 @@ name = "template-ansible-role"
 version = "0.1.0"
 description = "A template for creating Ansible roles"
 readme = "README.md"
-requires-python = ">=3.12,<3.15"
+requires-python = ">=3.13,<3.15"
+dependencies = [
+    "ansible-core>=2.19"
+]
 
 [dependency-groups]
 dev = [
-    "ansible-core>=2.18",
+    "ansible-core>=2.19",
     "ansible-dev-tools",
     "ansible-doctor",
     "prek",
@@ -18,3 +21,8 @@ openstack = [
     "openstacksdk",
     "molecule-plugins[openstack]",
 ]
+
+# Plain `uv sync` installs only [project].dependencies (ansible-core).
+# The toolchain lives in the dev group: `uv sync --group dev`.
+[tool.uv]
+default-groups = []

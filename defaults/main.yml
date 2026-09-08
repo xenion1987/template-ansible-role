@@ -1,6 +1,14 @@
 ---
-# @var example_variable: "Example variable for demonstration purposes"
+# Variable documentation for ansible-doctor.
+#
+# Valid @var subtypes: description | type | required | value | example | deprecated
+# There is no ":default:" subtype - the default is read from the value below.
+# Do not use the short form "# @var name: text": it writes to ":value:" and
+# collides with the auto-detected value, which aborts ansible-doctor.
+#
+# @var example_variable:description: Example variable for demonstration purposes
 # @var example_variable:type: str
 # @var example_variable:required: false
-# @var example_variable:default: "hello_world"
+# @var example_variable:example: >
+# example_variable: hello_world
 example_variable: "hello_world"

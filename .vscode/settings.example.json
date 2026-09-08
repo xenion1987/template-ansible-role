@@ -1,7 +1,7 @@
 {
   "ansible.ansible.useFullyQualifiedCollectionNames": true,
   "ansible.lightspeed.suggestions.enabled": false,
-  "ansible.python.interpreterPath": ".venv/ansible/bin/python",
+  "ansible.python.interpreterPath": ".venv/bin/python",
   "python.terminal.activateEnvironment": true,
   "redhat.telemetry.enabled": false,
   "files.associations": {

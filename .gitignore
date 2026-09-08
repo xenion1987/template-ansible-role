@@ -18,6 +18,6 @@ __pycache__/
 .venv
 
 # VSCode
-.vscode/
+.vscode/*
 !.vscode/settings.example.json
 .devcontainer/
