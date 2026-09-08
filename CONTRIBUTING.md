@@ -20,7 +20,7 @@ uv run molecule test
 
 `molecule test` defaults to Debian 13. Override the target with
 `MOLECULE_DISTRO=rockylinux9` (or `ubuntu2404`) to reproduce a specific CI job.
-CI runs every distro against ansible-core 2.19/Python 3.13 and 2.20/Python 3.14.
+CI runs every distro against ansible-core 2.19/Python 3.13 and 2.21/Python 3.14.
 
 ## Documentation
 
