@@ -68,10 +68,9 @@ To release manually - or to recover one that was never cut - use
 *Actions -> Release Pipeline -> Run workflow*: `bump` forces a level, `dry_run`
 (on by default) prints the plan without tagging.
 
-Releasing is opt-in. While the `GALAXY_API_KEY` secret is unset, the pipeline's
-`gate` job skips everything and neither a tag nor a release is created, so a
-repository that is not ready to publish stays clean. Its job summary says so
-explicitly rather than looking like a normal green run.
+Tag and GitHub release are always created for a recognised prefix. Only the
+Ansible Galaxy import needs `GALAXY_API_KEY`; without it that step logs why it
+skips and the release itself still happens.
 
 ## Supported versions
 
