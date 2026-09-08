@@ -12,17 +12,21 @@ env:
   PY_COLORS: "1"
   ANSIBLE_FORCE_COLOR: "1"
 
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   lint:
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           path: ${{ env.ROLE_NAME }}
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v8.2.0
+        uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
         with:
           python-version: "3.14"
 
@@ -42,32 +46,46 @@ jobs:
     needs: lint
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
         distro:
           - "debian13"
           - "rockylinux9"
           - "ubuntu2404"
-        ansible-version:
-          - "2.20"
-        python-version:
-          - "3.14"
+        # Each ansible-core release supports a specific range of controller
+        # Python versions, so version and interpreter are paired in one matrix
+        # dimension instead of a cross product. The oldest pair must match
+        # min_ansible_version in meta/main.yml and the ansible-core floor in
+        # pyproject.toml - only tested versions may be advertised.
+        ansible:
+          - version: "2.19"
+            python: "3.13"
+          - version: "2.20"
+            python: "3.14"
+    name: test (${{ matrix.distro }}, ansible ${{ matrix.ansible.version }})
     steps:
       - name: Check out repository
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           path: ${{ env.ROLE_NAME }}
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v8.2.0
+        uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
         with:
-          python-version: ${{ matrix.python-version }}
+          python-version: ${{ matrix.ansible.python }}
 
       - name: Install test dependencies
         run: |
           uv sync \
             --group dev \
-            --python python${{ matrix.python-version }} \
-            --upgrade-package "ansible-core==${{ matrix.ansible-version }}.*"
+            --python "${{ matrix.ansible.python }}" \
+            --upgrade-package "ansible-core==${{ matrix.ansible.version }}.*"
+        working-directory: ${{ env.ROLE_NAME }}
+
+      - name: Verify resolved versions
+        run: |
+          uv run ansible --version
+          uv run python --version
         working-directory: ${{ env.ROLE_NAME }}
 
       - name: Run tests
@@ -75,3 +93,25 @@ jobs:
         env:
           MOLECULE_DISTRO: ${{ matrix.distro }}
         working-directory: ${{ env.ROLE_NAME }}
+
+  # Stable aggregate check. Branch protection requires `lint` and
+  # `test-matrix` only, so adding a distro or an ansible-core version never
+  # means editing the ruleset's required-status-check list again.
+  # `if: always()` is essential: a skipped required check counts as passing,
+  # so the gate must run and fail explicitly.
+  test-matrix:
+    needs: test
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Assert every matrix job succeeded
+        env:
+          RESULT: ${{ needs.test.result }}
+        run: |
+          set -euo pipefail
+          echo "matrix result: ${RESULT}"
+          if [ "${RESULT}" != "success" ]; then
+            echo "::error::test matrix did not succeed (${RESULT})"
+            exit 1
+          fi

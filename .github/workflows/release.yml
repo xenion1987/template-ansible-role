@@ -5,81 +5,284 @@ on:
   push:
     branches:
       - main
+  # Manual entry point: inspect the plan without tagging (dry_run, the default)
+  # or force a bump to recover a release that was never cut.
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: "Bump to apply (auto = derive from commits since last release)"
+        type: choice
+        default: "auto"
+        options:
+          - "auto"
+          - "patch"
+          - "minor"
+          - "major"
+      dry_run:
+        description: "Only print the plan, do not tag or publish"
+        type: boolean
+        default: true
 
-permissions:
-  contents: write
+# Queue rather than cancel: the plan is derived from repository state, so a
+# queued run that GitHub discards is recovered by the next one.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  ROLE_NAME: ${{ github.event.repository.name }}
 
 jobs:
-  release:
+  # The release pipeline is opt-in and stays dormant until GALAXY_API_KEY is
+  # configured. Without this gate a template repository - and every fresh copy
+  # of it - tags itself on the first `feat:` commit. The check lives in a step's
+  # env because the `secrets` context is not available in a job-level or
+  # step-level `if:`; only `env` is.
+  gate:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions: {}
+    outputs:
+      enabled: ${{ steps.check.outputs.enabled }}
     steps:
+      - name: Check whether releasing is configured
+        id: check
+        shell: bash
+        env:
+          GALAXY_API_KEY: ${{ secrets.GALAXY_API_KEY }}
+        run: |
+          set -euo pipefail
+          if [ -n "${GALAXY_API_KEY}" ]; then
+            echo "enabled=true" >> "${GITHUB_OUTPUT}"
+            echo "GALAXY_API_KEY is configured - release pipeline is active"
+          else
+            echo "enabled=false" >> "${GITHUB_OUTPUT}"
+            echo "GALAXY_API_KEY is not configured - skipping the release pipeline"
+            {
+              echo "### Release pipeline dormant"
+              echo
+              echo "No release was cut: \`GALAXY_API_KEY\` is not configured."
+              echo
+              echo "This is the intended state for the template repository and"
+              echo "for a fresh copy of it. Add the secret under"
+              echo "*Settings -> Secrets and variables -> Actions* to activate"
+              echo "tagging, GitHub releases and the Galaxy import."
+            } >> "${GITHUB_STEP_SUMMARY}"
+          fi
+
+  release:
+    needs: gate
+    if: needs.gate.outputs.enabled == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      # Actions are pinned to commit SHAs, not moving tags: this job holds
+      # contents: write and sees GALAXY_API_KEY. Dependabot updates SHA pins
+      # just as it does version tags.
       - name: Check out repository
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
-          path: ${{ github.event.repository.name }}
+          path: ${{ env.ROLE_NAME }}
           fetch-depth: 0
           fetch-tags: true
 
-      - name: Determine bump type
-        id: bump_type
+      - name: Resolve release plan
+        id: plan
+        shell: bash
+        working-directory: ${{ env.ROLE_NAME }}
         env:
-          COMMIT_MSG: ${{ github.event.head_commit.message }}
+          FORCED_BUMP: ${{ inputs.bump || 'auto' }}
+          DRY_RUN: ${{ inputs.dry_run || 'false' }}
         run: |
-          if echo "$COMMIT_MSG" | grep -qiE '^major:'; then
-            echo "bump=major" >> "$GITHUB_OUTPUT"
-          elif echo "$COMMIT_MSG" | grep -qiE '^feat:'; then
-            echo "bump=minor" >> "$GITHUB_OUTPUT"
-          elif echo "$COMMIT_MSG" | grep -qiE '^fix:'; then
-            echo "bump=patch" >> "$GITHUB_OUTPUT"
+          set -euo pipefail
+
+          # Base version: the highest semver tag in the repository, not the
+          # closest reachable one. git describe would bump from the wrong base
+          # after out-of-order or branch-local tagging. Non-semver tags are
+          # filtered out before any arithmetic sees them; pre-release tags are
+          # deliberately not recognised.
+          BASE="$(
+            git tag --list 'v*' --sort=-v:refname \
+              | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' \
+              | head -n1 \
+              || true
+          )"
+          if [ -n "${BASE}" ]; then
+            RANGE="${BASE}..HEAD"
           else
-            echo "bump=none" >> "$GITHUB_OUTPUT"
+            BASE="v0.0.0"
+            RANGE="HEAD"
           fi
 
-      - name: Calculate new version
-        if: steps.bump_type.outputs.bump != 'none'
-        id: new_version
-        working-directory: ${{ github.event.repository.name }}
-        run: |
-          LATEST_TAG="$(git describe --tags --abbrev=0 2>/dev/null || true)"
-          LATEST_TAG="${LATEST_TAG:-0.0.0}"
-          LATEST_TAG="${LATEST_TAG#v}"
-          IFS='.' read -r MAJOR MINOR PATCH <<< "${LATEST_TAG}"
-          case "${{ steps.bump_type.outputs.bump }}" in
-            major) echo "version=v$((MAJOR + 1)).0.0" >> "$GITHUB_OUTPUT" ;;
-            minor) echo "version=v${MAJOR}.$((MINOR + 1)).0" >> "$GITHUB_OUTPUT" ;;
-            patch) echo "version=v${MAJOR}.${MINOR}.$((PATCH + 1))" >> "$GITHUB_OUTPUT" ;;
+          # Bump: the strongest signal across EVERY commit since the base tag,
+          # not just the pushed head commit. This survives multi-commit pushes,
+          # merge-commit strategies and runs dropped from the concurrency
+          # queue - a missed prefix stays in range and is picked up next time.
+          rank() {
+            case "$1" in
+              major) echo 3 ;;
+              minor) echo 2 ;;
+              patch) echo 1 ;;
+              *) echo 0 ;;
+            esac
+          }
+
+          # Commits whose message carries a breaking-change footer. Matched
+          # case-sensitively: the spec defines the token in uppercase.
+          BREAKING="$(
+            git log --no-merges -E \
+              --grep='(^|[[:space:]])BREAKING[ -]CHANGE' \
+              --format='%H' "${RANGE}" \
+              || true
+          )"
+
+          BUMP="none"
+          DRIVERS=""
+          COUNT=0
+
+          if [ "${FORCED_BUMP}" != "auto" ]; then
+            BUMP="${FORCED_BUMP}"
+            DRIVERS="| \`${BUMP}\` | manual override via workflow_dispatch |"$'\n'
+          else
+            while IFS=$'\t' read -r sha subject; do
+              [ -n "${sha}" ] || continue
+              COUNT=$((COUNT + 1))
+
+              commit_bump="none"
+              if printf '%s' "${subject}" | grep -qiE '^(major:|[a-z]+(\([^)]*\))?!:)' \
+                || { [ -n "${BREAKING}" ] && printf '%s\n' "${BREAKING}" | grep -qF "${sha}"; }; then
+                commit_bump="major"
+              elif printf '%s' "${subject}" | grep -qiE '^feat(\([^)]*\))?:'; then
+                commit_bump="minor"
+              elif printf '%s' "${subject}" | grep -qiE '^fix(\([^)]*\))?:'; then
+                commit_bump="patch"
+              fi
+
+              if [ "${commit_bump}" != "none" ]; then
+                # Escape pipes so a commit subject cannot break the table.
+                safe="$(printf '%s' "${subject}" | sed 's/|/\\|/g' | cut -c1-72)"
+                DRIVERS="${DRIVERS}| \`${commit_bump}\` | ${safe} |"$'\n'
+              fi
+              if [ "$(rank "${commit_bump}")" -gt "$(rank "${BUMP}")" ]; then
+                BUMP="${commit_bump}"
+              fi
+            done <<< "$(git log --no-merges --format='%H%x09%s' "${RANGE}")"
+          fi
+
+          IFS='.' read -r MAJOR MINOR PATCH <<< "${BASE#v}"
+          case "${BUMP}" in
+            major) VERSION="v$((MAJOR + 1)).0.0" ;;
+            minor) VERSION="v${MAJOR}.$((MINOR + 1)).0" ;;
+            patch) VERSION="v${MAJOR}.${MINOR}.$((PATCH + 1))" ;;
+            none) VERSION="" ;;
+            *) echo "::error::unknown bump type '${BUMP}'"; exit 1 ;;
           esac
 
+          BLOCKED=""
+          if [ -n "${VERSION}" ] && git rev-parse -q --verify "refs/tags/${VERSION}" >/dev/null; then
+            BLOCKED="tag ${VERSION} already exists"
+          fi
+
+          RELEASE="false"
+          if [ -n "${VERSION}" ] && [ -z "${BLOCKED}" ] && [ "${DRY_RUN}" != "true" ]; then
+            RELEASE="true"
+          fi
+
+          # Job summary: makes the decision visible even when it is "no
+          # release", which is otherwise an invisible green run.
+          if [ "${FORCED_BUMP}" != "auto" ]; then
+            BUMP_ORIGIN="forced"
+          else
+            BUMP_ORIGIN="auto"
+          fi
+          {
+            echo "### Release plan"
+            echo
+            echo "| | |"
+            echo "| --- | --- |"
+            echo "| Base version | \`${BASE}\` |"
+            echo "| Commits inspected | ${COUNT} (\`${RANGE}\`) |"
+            echo "| Bump | \`${BUMP}\` (${BUMP_ORIGIN}) |"
+            echo "| Target version | ${VERSION:-none} |"
+            if [ -n "${BLOCKED}" ]; then
+              echo "| Outcome | **blocked** - ${BLOCKED} |"
+            elif [ "${DRY_RUN}" = "true" ]; then
+              echo "| Outcome | dry run - nothing tagged or published |"
+            elif [ "${RELEASE}" = "true" ]; then
+              echo "| Outcome | tag + GitHub release |"
+            else
+              echo "| Outcome | no release - no commit since \`${BASE}\` carries a release prefix |"
+            fi
+            if [ -n "${DRIVERS}" ]; then
+              echo
+              echo "<details><summary>Commits driving the bump</summary>"
+              echo
+              echo "| bump | commit |"
+              echo "| --- | --- |"
+              printf '%s' "${DRIVERS}"
+              echo
+              echo "</details>"
+            fi
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+          {
+            echo "base=${BASE}"
+            echo "bump=${BUMP}"
+            echo "version=${VERSION}"
+            echo "release=${RELEASE}"
+          } >> "${GITHUB_OUTPUT}"
+
+          echo "base=${BASE} bump=${BUMP} version=${VERSION:-none} release=${RELEASE}"
+
+          # A blocked plan is only an error when it was meant to publish.
+          if [ -n "${BLOCKED}" ] && [ "${DRY_RUN}" != "true" ]; then
+            echo "::error::${BLOCKED} - refusing to overwrite"
+            exit 1
+          fi
+
       - name: Create release
-        if: steps.bump_type.outputs.bump != 'none'
-        uses: softprops/action-gh-release@v3
+        if: steps.plan.outputs.release == 'true'
+        uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3
         with:
-          tag_name: ${{ steps.new_version.outputs.version }}
+          tag_name: ${{ steps.plan.outputs.version }}
+          target_commitish: ${{ github.sha }}
           generate_release_notes: true
           make_latest: true
 
-      ### DEFAULT GALAXY IMPORT (uses GitHub owner as namespace)
-      # - name: Import role to Ansible Galaxy
-      #   if: steps.bump_type.outputs.bump != 'none' && secrets.GALAXY_API_KEY != ''
-      #   run: |
-      #     uv run ansible-galaxy role import \
-      #       --token "${{ secrets.GALAXY_API_KEY }}" \
-      #       "${{ github.repository_owner }}" \
-      #       "${{ github.event.repository.name }}"
-
-      ### ALTERNATE GALAXY IMPORT (uses configurable namespace)
-      - name: Import role to Ansible Galaxy with alternate namespace
-        if: steps.bump_type.outputs.bump != 'none' && env.GALAXY_API_KEY != ''
+      # Galaxy discovers a role's versions from the repository's tags, so the
+      # import references the default branch rather than the tag just created.
+      - name: Import role to Ansible Galaxy
+        if: steps.plan.outputs.release == 'true'
+        shell: bash
         env:
           GALAXY_API_KEY: ${{ secrets.GALAXY_API_KEY }}
           GALAXY_NAMESPACE: ${{ vars.GALAXY_NAMESPACE || github.repository_owner }}
+          GITHUB_REF_NAME: ${{ github.event.repository.default_branch }}
+          GITHUB_REPO_NAME: ${{ github.event.repository.name }}
+          GITHUB_OWNER: ${{ github.repository_owner }}
         run: |
-          curl -sS -X POST "https://galaxy.ansible.com/api/v1/imports/" \
+          set -euo pipefail
+
+          # No emptiness check needed: the `gate` job already established that
+          # GALAXY_API_KEY is set, otherwise this job would not run.
+          payload="$(
+            jq -nc \
+              --arg ns "${GALAXY_NAMESPACE}" \
+              --arg ref "${GITHUB_REF_NAME}" \
+              --arg repo "${GITHUB_REPO_NAME}" \
+              --arg user "${GITHUB_OWNER}" \
+              '{
+                alternate_namespace_name: $ns,
+                github_reference: $ref,
+                github_repo: $repo,
+                github_user: $user
+              }'
+          )"
+          curl -sS --fail-with-body -X POST "https://galaxy.ansible.com/api/v1/imports/" \
             -H "Authorization: token ${GALAXY_API_KEY}" \
             -H "Content-Type: application/json" \
-            -d '{
-              "alternate_namespace_name": "'"${GALAXY_NAMESPACE}"'",
-              "github_reference": "${{ github.event.repository.default_branch }}",
-              "github_repo": "${{ github.event.repository.name }}",
-              "github_user": "${{ github.repository_owner }}"
-            }'
+            -d "${payload}"
+          echo "Galaxy import requested for ${GALAXY_NAMESPACE}/${GITHUB_REPO_NAME}" \
+            >> "${GITHUB_STEP_SUMMARY}"

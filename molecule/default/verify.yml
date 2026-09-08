@@ -1,0 +1,39 @@
+---
+- name: Verify
+  hosts: all
+  gather_facts: true
+
+  # Role defaults are NOT in scope here: verify.yml is a separate playbook and
+  # does not include the role, so `example_variable` would be undefined without
+  # this. Load the defaults explicitly when an assertion needs them.
+  vars_files:
+    - ../../defaults/main.yml
+
+  tasks:
+    - name: ASSERT | Converge produced a usable host
+      ansible.builtin.assert:
+        that:
+          - ansible_facts['os_family'] in ['Debian', 'RedHat']
+          - ansible_facts['pkg_mgr'] is defined
+        fail_msg: "Facts unusable - did converge finish?"
+        success_msg: "Host converged: {{ ansible_facts['distribution'] }} {{ ansible_facts['distribution_version'] }}"
+
+    - name: ASSERT | Role defaults are loadable and unchanged
+      ansible.builtin.assert:
+        that:
+          - example_variable == "hello_world"
+        fail_msg: "example_variable default is not what the role documents"
+        success_msg: "Role defaults match the documented values"
+
+    # Replace the assertions above with real ones about what your role changed.
+    # The useful shape is: read actual system state, then assert on it.
+    #
+    # - name: FACT | Read the config the role rendered
+    #   ansible.builtin.slurp:
+    #     src: /etc/example/example.conf
+    #   register: example_conf
+    #
+    # - name: ASSERT | Config contains the configured value
+    #   ansible.builtin.assert:
+    #     that:
+    #       - (example_conf.content | b64decode) is search(example_variable)

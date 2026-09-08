@@ -4,6 +4,10 @@
   gather_facts: false
 
   pre_tasks:
+    # The default images (geerlingguy/docker-*-ansible) already ship Python, so
+    # this is a no-op there. It exists so the scenario also works against plain
+    # distro images, which have no interpreter for the setup module to use -
+    # hence raw, and hence gather_facts: false until it has run.
     - name: PRE_TASK | Install python3
       changed_when: false
       ansible.builtin.raw: |-
@@ -27,6 +31,4 @@
       ansible.builtin.setup:
 
   roles:
-    # - role: template-ansible-role
-    # - role: "../../../"
     - role: "{{ lookup('env', 'MOLECULE_PROJECT_DIRECTORY') }}"

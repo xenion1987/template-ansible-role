@@ -6,7 +6,7 @@ galaxy_info:
   company: "Access-InTech"
   description: "A template to create Ansible roles"
   license: "MIT"
-  min_ansible_version: "2.18"
+  min_ansible_version: "2.19"
   namespace: "xenion1987"
   role_name: "template"
   platforms:
